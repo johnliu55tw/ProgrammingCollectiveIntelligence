@@ -8,5 +8,7 @@ verify_ssl = true
 [packages]
 matplotlib = "*"
 pillow = "*"
+requests = "*"
+beautifulsoup4 = "*"
 
 [requires]
