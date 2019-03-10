@@ -177,7 +177,9 @@ class Crawler(object):
 
     def crawl(self, urls, depth=2, timeout=3.0):
         next_urls = set()
-        for url in urls:
+        not_indexed_url = (url for url in urls if self.index.is_indexed(url) is False)
+
+        for url in not_indexed_url:
             try:
                 logger.info(f'Indexing {url}')
                 soup = self.get_content(url, timeout=timeout)

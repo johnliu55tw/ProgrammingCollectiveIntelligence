@@ -193,6 +193,51 @@ class CrawlerTestCase(unittest.TestCase):
             fake_url,
             self.crawler.get_words.return_value)
 
+    @mock.patch.object(crawler.Crawler, 'get_content')
+    @mock.patch.object(crawler.Crawler, 'do_index')
+    @mock.patch.object(crawler.Crawler, 'get_valid_links')
+    def test_crawl_with_depth_1(self, m_get_valid_links, m_do_index, m_get_content):
+        self.crawler.index.is_indexed.return_value = False
+        self.crawler.get_valid_links.return_value = [('Crawled Link', 'https://crawled-link.com')]
+        urls = ['https://fake-1.com/', 'https://fake-2.com/foo/bar']
+
+        self.crawler.crawl(urls, depth=1)
+
+        self.crawler.do_index.assert_has_calls(
+            [mock.call(urls[0], m_get_content.return_value),
+             mock.call(urls[1], m_get_content.return_value)],
+            any_order=True)
+
+    @mock.patch.object(crawler.Crawler, 'get_content')
+    @mock.patch.object(crawler.Crawler, 'do_index')
+    @mock.patch.object(crawler.Crawler, 'get_valid_links')
+    def test_crawl_with_depth_2(self, m_get_valid_links, m_do_index, m_get_content):
+        self.crawler.index.is_indexed.return_value = False
+        self.crawler.get_valid_links.return_value = [('Crawled Link', 'https://crawled-link.com')]
+        urls = ['https://fake-1.com/', 'https://fake-2.com/foo/bar']
+
+        self.crawler.crawl(urls, depth=2)
+
+        self.crawler.do_index.assert_has_calls(
+            [mock.call(urls[0], m_get_content.return_value),
+             mock.call(urls[1], m_get_content.return_value),
+             mock.call('https://crawled-link.com', m_get_content.return_value)],
+            any_order=True)
+
+    @mock.patch.object(crawler.Crawler, 'get_content')
+    @mock.patch.object(crawler.Crawler, 'do_index')
+    @mock.patch.object(crawler.Crawler, 'get_valid_links')
+    def test_crawl_will_ignore_indexed_url(self, m_get_valid_links, m_do_index, m_get_content):
+        self.crawler.index.is_indexed.side_effect = [False, True]
+        url = 'https://fake-1.com/'
+        urls = [url, url]
+
+        self.crawler.crawl(urls, depth=1)
+
+        self.crawler.do_index.assert_called_once_with(url, m_get_content.return_value)
+
+        print(self.crawler.do_index.calls)
+
 
 class SqliteIndexTestCase(unittest.TestCase):
 
