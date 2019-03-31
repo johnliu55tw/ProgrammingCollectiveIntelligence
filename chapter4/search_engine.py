@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 IGNORE_WORDS = ['the', 'of', 'to', 'and', 'a', 'in', 'is', 'it']
 
 
-class CrawlerOld:
+class Crawler:
 
     def __init__(self, db_name):
         self.conn = sqlite3.connect(db_name)
@@ -152,3 +152,87 @@ class CrawlerOld:
         cur.execute('CREATE INDEX url_to_idx ON link(to_id)')
         cur.execute('CREATE INDEX url_from_idx ON link(from_id)')
         self.conn.commit()
+
+
+class Searcher(object):
+
+    def __init__(self, dbname):
+        self.con = sqlite3.connect(dbname)
+
+    def __del__(self):
+        self.con.close()
+
+    def get_word_id(self, word):
+        cur = self.con.cursor()
+        cur.execute('SELECT rowid FROM wordlist WHERE word = ?', (word, ))
+        row = cur.fetchone()
+
+        return row[0]
+
+    def gen_query(self, word_ids):
+        tables = []
+        columns = ['w0.urlid']
+        clauses = []
+
+        for idx, word_id in enumerate(word_ids):
+            tables.append(f'wordlocation as w{idx}')
+            columns.append(f'w{idx}.location')
+            if idx == 0:
+                clauses.append(f'w{idx}.wordid = {word_id}')
+            else:
+                clauses.append(f'w{idx}.wordid = {word_id} AND w{idx-1}.urlid = w{idx}.urlid')
+
+        tables_string = ', '.join(tables)
+        columns_string = ', '.join(columns)
+        clauses_string = ' AND '.join(clauses)
+
+        return f'SELECT {columns_string} FROM {tables_string} WHERE {clauses_string}'
+
+    def get_match_rows(self, q):
+        words = q.split(' ')
+        word_ids = list(filter(None, (self.get_word_id(word) for word in words)))
+        query = self.gen_query(word_ids)
+        print(query)
+
+        cur = self.con.cursor()
+        cur.execute(query)
+
+        rows = [row for row in cur]
+
+        return (rows, word_ids)
+
+    def get_match_rows_old(self, q):
+        # Strings to build the query
+        fieldlist = 'w0.urlid'
+        tablelist = ''
+        clauselist = ''
+        wordids = []
+
+        # Split the words by spaces
+        words = q.split(' ')
+        tablenumber = 0
+
+        for word in words:
+            # Get the word ID
+            wordrow = self.con.execute(
+                'SELECT rowid FROM wordlist WHERE word = ?', (word, )).fetchone()
+
+            if wordrow is not None:
+                wordid = wordrow[0]
+                wordids.append(wordid)
+                if tablenumber > 0:
+                    tablelist += ','
+                    clauselist += ' and '
+                    clauselist += 'w%d.urlid=w%d.urlid and ' % (tablenumber-1, tablenumber)
+                fieldlist += ',w%d.location' % tablenumber
+                tablelist += 'wordlocation w%d' % tablenumber
+                clauselist += 'w%d.wordid=%d' % (tablenumber, wordid)
+                tablenumber += 1
+
+        # Create the query from the separate parts
+        fullquery = 'select %s from %s where %s' % (fieldlist, tablelist, clauselist)
+        print(fullquery)
+        cur = self.con.execute(fullquery)
+        rows = [row for row in cur]
+
+        return rows, wordids
